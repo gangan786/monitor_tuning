@@ -352,3 +352,186 @@ public class PrintArgSimple {
   }
   
   ~~~
+
+
+
+
+
+### 4-4 拦截复杂参数，环境变量，正则匹配拦截
+
++ this：@Self
++ 入参：可以用AnyType，也可以用真实类型，参考重载方法的拦截方式
++ 返回：@Return
+
+
+
+####获取对象的值
+
++ 简单类型：直接获取
+
++ 复杂类型：反射，类名+属性名
+
+  + 注意这里由于引入了User这个类，那么在编译脚本的时候就要引入该类所在的classpath（即User.class所在的路径：D:\Users\mr.gan\SpringBootProject\monitor_tuning\target\classes）
+
+  + 如果没引入的话会编译报错
+
+    ~~~powershell
+    D:\Users\mr.gan\SpringBootProject\monitor_tuning\src\main\java\org\meizhuo\monitor_tuning\chapter4>btrace 19760 PrintArgComplex.java
+    PrintArgComplex.java:12: 错误: 程序包org.meizhuo.monitor_tuning.chapter2不存在
+    import org.meizhuo.monitor_tuning.chapter2.User;
+                                              ^
+    PrintArgComplex.java:23: 错误: 找不到符号
+            public static void anyRead(@ProbeClassName String pcn, @ProbeMethodName String pmn, User user) {
+                                                                                                ^
+      符号:   类 User
+      位置: 类 org.meizhuo.monitor_tuning.chapter4.PrintArgComplex
+    BTrace compilation failed
+    ~~~
+
+  + 正确的使用命令
+
+    ~~~powershell
+    D:\Users\mr.gan\SpringBootProject\monitor_tuning\src\main\java\org\meizhuo\monitor_tuning\chapter4>btrace -cp "D:\Users\mr.gan\SpringBootProject\monitor_tuning\target\classes" 19760 PrintArgComplex.java
+    {id=1, name=刘冬冬, }
+    刘冬冬
+    org.meizhuo.monitor_tuning.chapter4.Ch4Controller,arg2
+    ~~~
+
+
+
+
++ 脚本示例
+
+
+  ~~~java
+@BTrace
+public class PrintArgComplex {
+	
+	
+	@OnMethod(
+	        clazz="org.meizhuo.monitor_tuning.chapter4.Ch4Controller",
+	        method="arg2",
+	        location=@Location(Kind.ENTRY)
+	)
+	public static void anyRead(@ProbeClassName String pcn, @ProbeMethodName String pmn, User user) {
+		//print all fields
+		BTraceUtils.printFields(user);
+		//print one field
+		Field filed2 = BTraceUtils.field("org.meizhuo.monitor_tuning.chapter2.User", "name");
+		BTraceUtils.println(BTraceUtils.get(filed2, user));
+		BTraceUtils.println(pcn+","+pmn);
+		BTraceUtils.println();
+    }
+}
+
+  
+  ~~~
+
+#### 正则表达式匹配类名和方法名
+
+~~~java
+@BTrace
+public class PrintRegex {
+	
+	@OnMethod(
+	        clazz="com.imooc.monitor_tuning.chapter4.Ch4Controller",
+	        method="/.*/"  	//这里表示拦截Ch4Controller里面的所有方法
+	)
+	public static void anyRead(@ProbeClassName String pcn, @ProbeMethodName String pmn) {
+		BTraceUtils.println(pcn+","+pmn);
+		BTraceUtils.println();
+    }
+}
+
+~~~
+
+
+
+#### 其他
+
++ 打印行号
+
++ 打印堆栈：Threads.jstack()
+
++ 打印环境变量
+
+  ~~~java
+  @BTrace
+  public class PrintJinfo {
+      static {
+      	BTraceUtils.println("System Properties:");
+      	BTraceUtils.printProperties();
+      	BTraceUtils.println("VM Flags:");
+      	BTraceUtils.printVmArguments();
+      	BTraceUtils.println("OS Enviroment:");
+      	BTraceUtils.printEnv();
+      	BTraceUtils.exit(0);
+      }
+  }
+  ~~~
+
+
+
+### 4-5 注意事项
+
++ **默认只能本地运行**
++ 生产环境下可以使用，但是被修改的字节码不会被还原
+
+
+
+### 5-1 Tomcat远程debug
+
++ 通信协议：JDWP（Java Debug Wire Protocol）：他定义了调试器（debugger）和被调试的java虚拟机（target VM）之间的通信协议，Tomcat支持此协议
+
++ 这里讲一下具体的配置吧
+
+  + 首先我使用的是Tomcat8，VMware虚拟了CentOS7，Java8，Intellij IDEA
+
+  + 首先修改Tomcat的配置文件 `tomcat/bin/startup.sh`开启jpda（添加`jpda`）
+
+    ~~~shell
+    exec "$PRGDIR"/"$EXECUTABLE" jpda start "$@"
+    ~~~
+
+  + 然后配置具体端口`tomcat/bin/catalina.sh` 找到如下内容并将`JPDA_ADDRESS` 的值改为对应端口，这个端口就是远程调试与本地通信的端口，如果你是用的类似阿里云的云服务器那么记得在安全组中放行此端口,我这里开放的端口是：54321，部分配置如下所示：
+
+    ~~~shell
+    if [ "$1" = "jpda" ] ; then
+      if [ -z "$JPDA_TRANSPORT" ]; then
+        JPDA_TRANSPORT="dt_socket"
+      fi
+      if [ -z "$JPDA_ADDRESS" ]; then
+        JPDA_ADDRESS="54321"
+      fi
+      if [ -z "$JPDA_SUSPEND" ]; then
+        JPDA_SUSPEND="n"
+      fi
+      if [ -z "$JPDA_OPTS" ]; then
+        JPDA_OPTS="-agentlib:jdwp=transport=$JPDA_TRANSPORT,address=$JPDA_ADDRESS,server=y,suspend=$JPDA_SUSPEND"
+      fi
+      CATALINA_OPTS="$JPDA_OPTS $CATALINA_OPTS"
+      shift
+    fi
+    
+    ~~~
+
+  + 查看服务端启动参数
+
+    ~~~shell
+    [root@localhost apache-tomcat-8.0.50]# ps -ef | grep tomcat
+    root       9167      1  1 14:48 pts/0    00:00:30 /usr/bin/java -Djava.util.logging.config.file=/usr/tomcat/apache-tomcat-8.0.50/conf/logging.properties -Djava.util.logging.manager=org.apache.juli.ClassLoaderLogManager -Djdk.tls.ephemeralDHKeySize=2048 -Djava.protocol.handler.pkgs=org.apache.catalina.webresources -agentlib:jdwp=transport=dt_socket,address=54321,server=y,suspend=n -Dignore.endorsed.dirs= -classpath /usr/tomcat/apache-tomcat-8.0.50/bin/bootstrap.jar:/usr/tomcat/apache-tomcat-8.0.50/bin/tomcat-juli.jar -Dcatalina.base=/usr/tomcat/apache-tomcat-8.0.50 -Dcatalina.home=/usr/tomcat/apache-tomcat-8.0.50 -Djava.io.tmpdir=/usr/tomcat/apache-tomcat-8.0.50/temp org.apache.catalina.startup.Bootstrap start
+    ~~~
+
+  + 那么此时服务端已经配置好了，接下来就是调试端了，我这里用的是Intellij IDEA，具体配置如图所示：
+
+    ![avater](https://github.com/gangan786/monitor_tuning/blob/master/img/remoteDebug.png?raw=true)
+
+  + 那么此时IDEA以debug模式运行的时候就可以和往常那样Debug了
+
++ 其实远程Debug是JVM支持的，所以只要在启动进程的时候添加如下运行参数即可实现远程debug的功能
+
+  ~~~shell
+  -agentlib:jdwp=transport=dt_socket,address=54321,server=y,suspend=n
+  ~~~
+
+

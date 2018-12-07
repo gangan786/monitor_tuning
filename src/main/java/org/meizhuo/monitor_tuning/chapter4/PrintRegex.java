@@ -10,7 +10,7 @@ public class PrintRegex {
 	
 	@OnMethod(
 	        clazz="com.imooc.monitor_tuning.chapter4.Ch4Controller",
-	        method="/.*/"
+	        method="/.*/"  //这里表示拦截Ch4Controller里面的所有方法
 	)
 	public static void anyRead(@ProbeClassName String pcn, @ProbeMethodName String pmn) {
 		BTraceUtils.println(pcn+","+pmn);

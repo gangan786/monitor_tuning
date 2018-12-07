@@ -16,7 +16,7 @@ public class PrintArgComplex {
 	
 	
 	@OnMethod(
-	        clazz="com.imooc.monitor_tuning.chapter4.Ch4Controller",
+	        clazz="org.meizhuo.monitor_tuning.chapter4.Ch4Controller",
 	        method="arg2",
 	        location=@Location(Kind.ENTRY)
 	)
@@ -24,7 +24,7 @@ public class PrintArgComplex {
 		//print all fields
 		BTraceUtils.printFields(user);
 		//print one field
-		Field filed2 = BTraceUtils.field("com.imooc.monitor_tuning.chapter2.User", "name");
+		Field filed2 = BTraceUtils.field("org.meizhuo.monitor_tuning.chapter2.User", "name");
 		BTraceUtils.println(BTraceUtils.get(filed2, user));
 		BTraceUtils.println(pcn+","+pmn);
 		BTraceUtils.println();
