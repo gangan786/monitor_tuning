@@ -365,7 +365,7 @@ public class PrintArgSimple {
 
 
 
-####获取对象的值
+####   获取对象的值
 
 + 简单类型：直接获取
 
@@ -402,8 +402,7 @@ public class PrintArgSimple {
 
 + 脚本示例
 
-
-  ~~~java
+~~~java
 @BTrace
 public class PrintArgComplex {
 	
@@ -423,13 +422,12 @@ public class PrintArgComplex {
 		BTraceUtils.println();
     }
 }
+~~~
 
-  
-  ~~~
-
-#### 正则表达式匹配类名和方法名
+####  	正则表达式匹配类名和方法名
 
 ~~~java
+
 @BTrace
 public class PrintRegex {
 	
@@ -442,7 +440,6 @@ public class PrintRegex {
 		BTraceUtils.println();
     }
 }
-
 ~~~
 
 
