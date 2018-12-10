@@ -532,3 +532,88 @@ public class PrintRegex {
   ~~~
 
 
+
+### 5-2 Tomcat—manager监控
+
++ 文档：apache-tomcat-8.0.50\webapps\docs
+
++ 步骤：
+
+  1. conf/tomcat-users.xml添加用户
+
+     tomcat-users.xml
+
+     ~~~xml
+     <?xml version='1.0' encoding='utf-8'?>
+     <role rolename="tomcat"/>
+       <role rolename="manager-status"/>
+       <role rolename="manager-gui"/>
+       <role rolename="admin-gui"/>
+       <user username="tomcat" password="babaai" roles="tomcat,manager-status,manager-gui"/>
+       <user username="Gangan" password="liudongdong" roles="manager-gui,tomcat,admin-gui"  />
+     
+     </tomcat-users>
+     ~~~
+
+  2. conf/Catalina/localhost/manager.xml配置允许远程连接
+
+     manager.xml
+
+     ~~~xml
+     <?xml version="1.0" encoding="UTF-8"?>
+     <Context privileged="true" antiResourceLocking="false"
+              docBase="${catalina.home}/webapps/manager">
+       <Valve className="org.apache.catalina.valves.RemoteAddrValve"
+              allow="127\.0\.0\.1" />
+     </Context>
+     ~~~
+
+  3. 重启tomcat
+
+  4. 本地访问127.0.0.1:8080/manager，输入用户密码
+
+  5. 这种监控手段还是比较简陋的
+
++ 注意这里的例子是用本地Tomcat，试过用远程主机，出现403 Access Denied 应该是网络的原因，查了资料没解决 这里贴一个[博客](http://blog.51cto.com/pizibaidu/2085954)比较详细
+
+
+
+
+
+
+
+### 5-3 psi-prode监控
+
++ 这款Tomcat监控工具比Tomcat-manager更强大，配置过程为
+  1. 首先下载：[GitHub](https://github.com/psi-probe/psi-probe)，我是直接下载zip
+  2. 使用Maven对下载解压的工程进行打包：mav clean package -DMaven.test.skip
+  3. 打包后的文件在`web/target/probe.war`
+  4. 我是把上面对Tomcat-manage的两个配置文件配置到自己远程Tomcat上，并把打好的war包部署，启动Tomcat，成功访问。这个没有tomcat-manage远程不能访问的问题
++ 具体的使用方法还是看文档
+
+
+
+### 5-4 Tomcat优化
+
++ 内存优化
+
+  后期JVM内存知识点单独讲解
+
++ 线程优化
+
+  + 介绍文档：webapps/docs/config/http.html，详细介绍推荐查看文档
+    1. maxConnection：（即请求的连接数）由于使用了NIO，这里的最大的默认连接数可以达到
+    2. acceptCount：当连接数达到最大连接数maxConnection时，会构建容量为acceptCount的缓存队列
+    3. maxThreads：最大线程数，即同一时刻的并发线程数，这个参数取决于具体机器的CPU配置
+    4. minSpaceThreads：最小空闲工作线程
+
++ 配置优化
+
+  1. autoDeploy：是否开启线程周期检查有没有新应用被添加，生产环境禁止开启
+  2. enableLookups：是否开启DNS查询，花费性能，生产环境禁止开启
+  3. reloadable：开启的话会重新载入发生变化的类，默认关闭，生产环境禁止开启
+
++ Session优化
+
+  如果不用session可以禁用，利用Redis
+
