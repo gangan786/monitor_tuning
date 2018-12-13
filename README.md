@@ -723,3 +723,72 @@ public class PrintRegex {
 + 大对象直接进入老年代：-XX:PretenureSizeThreshold
 + 长期存活对象进入老年代：-XX:MaxTenuringThreshold，-XX:+PrintTenuringDistribution，                                                -XX:TargetSurvivorRatio
 
+
+
+### 7-3 垃圾收集器
+
+#### 垃圾收集器的种类
+
++ 穿行收集器Serial：Serial，Serial Old
+
+  1. 开启串行收集器：-XX:+UseSerialGC（young区）-XX:UseSerialOldGC（Old区，默认开启），在要求高响应的情况下，是不会开启Young区的串行收集器
+
++ 并行收集器Parallel：Parallel Scavenge，Parallel Old，吞吐量
+
+  1. 吞吐量优先
+
+  2. 开启方式：-XX:+UseParallelGC，-XX:+UseParallelOldGC
+
+  3. Server模式下默认收集器
+
+  4. 我的 1 核 2 G 阿里云服务器是没开并行收集器的
+
+     ~~~bash
+     [root@izwz91vdyajvh2cr6jksfjz ~]# jinfo -flag UseParallelGC 4375
+     -XX:-UseParallelGC
+     [root@izwz91vdyajvh2cr6jksfjz ~]# jinfo -flag UseParallelGC 9913
+     -XX:-UseParallelGC
+     [root@izwz91vdyajvh2cr6jksfjz ~]# jinfo -flag UseParallelOldGC 9913
+     -XX:-UseParallelOldGC
+     
+     ~~~
+
++ 并发收集器Concurrent：CMS，G1，停顿时间
+
+  1. 响应时间优先
+  2. CMS：-XX:+UseConcMarkSweepGC（并发的标记清除），Old区使用的垃圾收集方式
+  3. -XX:+UseParNewGC（用于Young区并发）
+  4. -XX:+UseG1GC（对G1开启并发收集）
+
+
+
+#### 并行 VS 并发
+
++ 并行（Parallel）：指多条垃圾收集线程并行工作，但此时用户线程仍然处于等待状态。适合科学计算，后台处理等弱交互场景
++ 并发（Concurrent）：指用户线程与垃圾收集线程同时执行（但不一定是并行的，可能会交替执行），垃圾收集线程在执行的时候不会停顿用户程序的运行。适合对响应时间有要求的场景，比如WEB。
+
+
+
+#### 停顿时间 VS 吞吐量
+
++ 停顿时间：垃圾收集器做垃圾回收的时候中断应用进行垃圾回收的时间。可以通过：-XX:MaxGCPauseMillis
++ 吞吐量：花在垃圾收集的时间和花在应用时间的占比。可以通过：-XX:GCTimeRatio=<n>，垃圾收集时间占：1/1+n
++ 在理想的条件下评判一个垃圾回收器的好坏是：在最大吞吐量的情况下，停顿时间最短
+
+
+
+#### 垃圾收集器搭配
+
++ 
+
+![](https://github.com/gangan786/monitor_tuning/blob/master/img/GC.png?raw=true)
+
+#### 如何选择垃圾收集器
+
+具体查看官方文档
+
++ 优先调整堆的大小让服务器自己来选择
++ 如果内存小于100M，使用串行收集器
++ 如果是单核，并且没有停顿时间的要求，选择串行或者JVM自己选
++ 如果允许停顿时间超过一秒，选择并行或者JVM自己选
++ 如果响应时间比较重要，并且时间不能超过1秒，使用并发收集器
