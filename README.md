@@ -725,7 +725,7 @@ public class PrintRegex {
 
 
 
-### 7-3 垃圾收集器
+### 7-3,4 垃圾收集器
 
 #### 垃圾收集器的种类
 
@@ -741,7 +741,19 @@ public class PrintRegex {
 
   3. Server模式下默认收集器
 
-  4. 我的 1 核 2 G 阿里云服务器是没开并行收集器的
+  4. -XX:ParallelGCThreads=<N>，指定并行垃圾回收线程的数量
+
+  5. 自适应：Parallel Collector Ergonomics，他会依据如下设定参数自动调整堆的大小
+
+     + -XX:MaxGCPauseMillis=<N>
+     + -XX:GCTimeRatio=<N>
+     + -Xmx<N>
+     + 动态内存调整
+       + -XX:YoungGenerationSizeIncrement=<Y>
+       + -XX:TenuredGenerationSizeIncrement=<T>
+       + -XX:AdaptiveSizeDecrementScaleFactor=<D>
+
+  6. 我的 1 核 2 G 阿里云服务器是没开并行收集器的
 
      ~~~bash
      [root@izwz91vdyajvh2cr6jksfjz ~]# jinfo -flag UseParallelGC 4375
@@ -760,7 +772,92 @@ public class PrintRegex {
   3. -XX:+UseParNewGC（用于Young区并发）
   4. -XX:+UseG1GC（对G1开启并发收集）
 
+  #### CMS Collector
 
+  + 并发收集，低停顿，低延迟，作为老年代收集器
+  + CMS垃圾收集过程：
+    1. CMS initial mark：初始标记Root，STW（Stop The World）
+    2. CMS concurrent mark：并发标记
+    3. CMS concurrent preclean：并发预清理
+    4. CMS remark：重新标记，STW
+    5. CMS concurrent sweep：并发清除
+    6. CMS concurrent reset：并发重置
+  + CMS缺点：CPU敏感，会产生浮动垃圾，空间碎片
+  + CMS相关参数：
+    1. -XX:ConcGCThreads：并发的GC线程数
+    2. -XX:+UseCMSCompactAtFullCollection：FullGC之后做压缩，减少空间碎片
+    3. -XX:CMSFullGCsBeforeCompaction：多少次FullGC之后压缩一次
+    4. -XX:CMSInitiatingOccupancyFracton：指定百分比，当Old区占比大于指定百分比的时候触发FullGC 
+    5. -XX:+UseCMSInitiatingOccupancyOnly：是否动态调
+    6. -XX:+CMSScavengeBeforeRemark：FullGC之前先做YoungGC
+    7. -XX:+CMSClassUnloadingEnabled：启用回收Perm区
+  + iCMS：适用于单核或者双核，在java8中已经被废除使用了
+
+  #### G1 Collector
+
+  + 简介
+
+    The first focus of G1 is to provide a solution for users running applications that require larger heaps with limited GC latency.This means heap sizes of around 6G or larger,and a satble and predictable pause time below 0.5 seconds.
+
+    适用新生代，老年代
+
+  + Young，Old逻辑上存在，把堆切成若干小块作为基本单位（Region）
+
+  + G1的几个概念：
+
+    1. Region（内存分配的基本单位）
+    2. SATB：Snapshot-At-The-Beginning，它是通过Root Tracing得到的，GC开始时候存活对象的快照
+    3. RSet：记录了其他Region中的对象引用本Region中对象的关系，属于point-into结构（谁引用了我的对象）
+
+  + Young GC的过程：
+
+    1. 新对象进入Eden区
+    2. 存活对象拷贝到Survivor区
+    3. 存活时间达到年龄阈值时，对象晋升到Old区
+
+  + MixedGC
+
+    1. 不是FullGC，回收所有的Young和部分Old
+
+    2. global concurrent marking过程：
+
+       2-1 Initial marking phase：标记GC Root，STW
+
+       2-2 Root region scanning phase：标记存活Region
+
+       2-3 Concurrent marking phase：标记存活对象
+
+       2-4 Remark phase：重新标记，STW
+
+       2-5 Cleanup phase：部分STW
+
+    3. MixedGC时机
+
+       + InitiatingHeapOccupancyPercent：堆占有率达到这个数值则触发global concurrent marking，默认45%
+       + G1HeapWasterPercent：在global concurrent marking结束之后，可以知道有多少空间要被回收，在每次YGC之后和再次发生MixedGC之前，会检查垃圾占比是否到达此参数，只有达到了，下次才会发生MixedGC
+
+    4. MixedGC相关参数
+
+       + G1MixedGCLiveThresholdPercent：Old区的region被回收时候的存活对象占比
+       + G1MixedGCCountTarget：一次global concurrent marking之后，最多执行MixedGC的次数
+       + G1OldCSetRegionThresholdPercent：一次MixedGC中能被选入CSet的最多old区的region数量
+
+    5. 常用参数：
+
+       + -XX:+UseG1GC：开启G1
+       + -XX:G1HeapRegionSize=n，region的大小，1-32M，2048个
+       + -XX:MaxGCPauseMillis：最大停顿时间
+
+    6. 最佳实践
+
+       + 年轻代大小：避免使用-Xmn，-XX:NewRatio等显式设置Young区大小，会覆盖暂停时间目标
+       + 暂停时间目标：暂停时间不要太严苛，其吞吐量目标是90%的应用程序时间和10%的垃圾回收时间，太严苛会直接影响吞吐量
+
+    7. 是否需要切换到G1
+
+       + 50%以上的堆被存活对象占用
+       + 对象分配和晋升的速度变化非常大
+       + 垃圾回收时间特别长，超过了一秒
 
 #### 并行 VS 并发
 
@@ -792,3 +889,4 @@ public class PrintRegex {
 + 如果是单核，并且没有停顿时间的要求，选择串行或者JVM自己选
 + 如果允许停顿时间超过一秒，选择并行或者JVM自己选
 + 如果响应时间比较重要，并且时间不能超过1秒，使用并发收集器
+
